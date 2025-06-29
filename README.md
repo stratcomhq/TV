@@ -36,23 +36,14 @@ Non sai come creare un proxy o vuoi una lista gia pronta usa questo link.
 
 ## 🔗 Link Film & MPD TEST
 
-Queste liste devono essere utilizzate con mediaflow-proxy usando il link cosi.
+Queste liste devono essere utilizzate con mediaflow-proxy usando questo link per generare l' URL da usare.
+`https://nzo66-mfpform3u.hf.space`
 
 - **Lista Film**  
-  [`https://nzo66-mfpform3u.hf.space/proxy?<server-ip>:<password>&https://raw.githubusercontent.com/nzo66/TV/refs/heads/main/film.m3u`](https://nzo66-mfpform3u.hf.space/proxy?<server-ip>:<password>&https://raw.githubusercontent.com/nzo66/TV/refs/heads/main/film.m3u)
-
-Sostituisci:
-
-- `<server-ip>` con l'indirizzo IP del tuo server mediaflow-proxy  
-- `<password>` con la password del tuo mediaflow-proxy  
+  [`https://raw.githubusercontent.com/nzo66/TV/refs/heads/main/film.m3u`](https://raw.githubusercontent.com/nzo66/TV/refs/heads/main/film.m3u)
 
 - **Lista MPD** (solo ip Europeo)
-  [`https://nzo66-mfpform3u.hf.space/proxy?<server-ip>:<password>&https://raw.githubusercontent.com/nzo66/TV/refs/heads/main/mpd.m3u`](https://nzo66-mfpform3u.hf.space/proxy?<server-ip>:<password>&https://raw.githubusercontent.com/nzo66/TV/refs/heads/main/mpd.m3u)
-
-Sostituisci:
-
-- `<server-ip>` con l'indirizzo IP del tuo server mediaflow-proxy  
-- `<password>` con la password del tuo mediaflow-proxy  
+  [`https://raw.githubusercontent.com/nzo66/TV/refs/heads/main/mpd.m3u`](https://raw.githubusercontent.com/nzo66/TV/refs/heads/main/mpd.m3u)
 
 ---
 
@@ -116,15 +107,7 @@ Avvia creando un fork della repository proxy.
 
 ### 🔁 Come proxare la lista con Mediaflow-Proxy?
 
-Utilizza il seguente URL: `https://nzo66-mfpform3u.hf.space/proxy?<server-ip>:<password>&<url-lista>`
-
-questo sara il link della tua lista da mettere nelle app iptv!
-
-Sostituisci:
-
-- `<server-ip>` con l'indirizzo IP del tuo server MFP
-- `<password>` con la password del tuo mediaflow-proxy  
-- `<url-lista>` con l'URL effettivo della tua lista M3U (es. quello GitHub)
+Clicca sul seguente URL per generare la lista: `https://nzo66-mfpform3u.hf.space/`
 
 Questo ti permetterà di servire la lista M3U attraverso il tuo proxy personale in modo sicuro e performante.
 
