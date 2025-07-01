@@ -2792,6 +2792,56 @@
         ],
         "Soccer</span>": [
             {
+                "time": "08:00",
+                "event": "China - League 2 - South : Guangdong Mingtu vs Wuhan Three Towns B",
+                "channels": []
+            },
+            {
+                "time": "08:00",
+                "event": "China - League 2 - South : Kunming City Star vs Chengdu Rongcheng B",
+                "channels": []
+            },
+            {
+                "time": "09:00",
+                "event": "Interclub friendly : Utrecht vs FCSB",
+                "channels": []
+            },
+            {
+                "time": "09:30",
+                "event": "China - League 2 - South : Quanzhou Yassin vs Shenzhen 2028 FC",
+                "channels": []
+            },
+            {
+                "time": "10:00",
+                "event": "China - League 2 - North : Hubei Istar vs Hangzhou Linping Wuyue",
+                "channels": []
+            },
+            {
+                "time": "11:30",
+                "event": "China - League 2 - South : Guangxi Lanhang vs Guangxi Hengchen",
+                "channels": []
+            },
+            {
+                "time": "11:30",
+                "event": "China - League 2 - North : Nantong Haimen Codion vs Shanghai Port B",
+                "channels": []
+            },
+            {
+                "time": "15:00",
+                "event": "Finland - Veikkausliiga : KuPS vs IF Gnistan",
+                "channels": []
+            },
+            {
+                "time": "15:00",
+                "event": "Interclub friendly : Ludogorets Razgrad vs Hradec Kralove",
+                "channels": []
+            },
+            {
+                "time": "15:00",
+                "event": "Latvia - Virsliga : Super Nova vs Auda",
+                "channels": []
+            },
+            {
                 "time": "15:30",
                 "event": "World - Club Friendly : Radomlje vs Dinamo Zagreb",
                 "channels": [
@@ -2807,6 +2857,11 @@
                 "channels": []
             },
             {
+                "time": "16:00",
+                "event": "Georgia - Supercupa : Iberia 1999 vs Torpedo Kutaisi",
+                "channels": []
+            },
+            {
                 "time": "17:00",
                 "event": "Friendly International Women : Serbia W vs Russia W",
                 "channels": [
@@ -2815,6 +2870,16 @@
                         "channel_id": "573"
                     }
                 ]
+            },
+            {
+                "time": "17:00",
+                "event": "Latvia - Virsliga : Riga FC vs FK Jelgava",
+                "channels": []
+            },
+            {
+                "time": "17:00",
+                "event": "Interclub friendly : Twente vs Motherwell",
+                "channels": []
             },
             {
                 "time": "19:00",
