@@ -3025,76 +3025,115 @@ def world_channels_generator():
     print("Eseguendo il world_channels_generator.py...")
     # Il codice che avevi nello script "world_channels_generator.py" va qui, senza modifiche.
     import requests
+    import time
     import re
-    import os
-    from collections import defaultdict
-    from dotenv import load_dotenv
     
-    # Carica le variabili d'ambiente dal file .env
-    load_dotenv()
-
-    OUTPUT_FILE = "world.m3u8"
-    BASE_URLS = [
-        "https://vavoo.to"
-    ]
+    def getAuthSignature():
+        headers = {
+            "user-agent": "okhttp/4.11.0",
+            "accept": "application/json",
+            "content-type": "application/json; charset=utf-8",
+            "content-length": "1106",
+            "accept-encoding": "gzip"
+        }
+        data = {
+            "token": "tosFwQCJMS8qrW_AjLoHPQ41646J5dRNha6ZWHnijoYQQQoADQoXYSo7ki7O5-CsgN4CH0uRk6EEoJ0728ar9scCRQW3ZkbfrPfeCXW2VgopSW2FWDqPOoVYIuVPAOnXCZ5g",
+            "reason": "app-blur",
+            "locale": "de",
+            "theme": "dark",
+            "metadata": {
+                "device": {
+                    "type": "Handset",
+                    "os": "Android",
+                    "osVersion": "10",
+                    "model": "Pixel 4",
+                    "brand": "Google"
+                }
+            }
+        }
+        resp = requests.post("https://vavoo.to/mediahubmx-signature.json", json=data, headers=headers, timeout=10)
+        return resp.json().get("signature")
     
-    # Scarica la lista dei canali
-    def fetch_channels(base_url):
-        try:
-            response = requests.get(f"{base_url}/channels", timeout=10)
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as e:
-            print(f"Errore durante il download da {base_url}: {e}")
-            return []
+    def vavoo_groups():
+        # Puoi aggiungere altri gruppi per più canali
+        return [""]
     
-    # Pulisce il nome del canale
     def clean_channel_name(name):
-        return re.sub(r"\s*(\|E|\|H|\(6\)|\(7\)|\.c|\.s)", "", name).strip()
+        """Rimuove i suffissi .a, .b, .c dal nome del canale"""
+        # Rimuove .a, .b, .c alla fine del nome (con o senza spazi prima)
+        cleaned_name = re.sub(r'\s*\.(a|b|c|s|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|t|u|v|w|x|y|z)\s*$', '', name, flags=re.IGNORECASE)
+        return cleaned_name.strip()
     
-    # Salva il file M3U8 con i canali ordinati alfabeticamente per categoria
-    def save_m3u8(channels):
-        if os.path.exists(OUTPUT_FILE):
-            os.remove(OUTPUT_FILE)
-    
-        # Raggruppa i canali per nazione (group-title)
-        grouped_channels = defaultdict(list)
-        for name, url, country in channels:
-            grouped_channels[country].append((name, url))
-    
-        # Ordina le categorie alfabeticamente e i canali dentro ogni categoria
-        sorted_categories = sorted(grouped_channels.keys())
-    
-        with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-            f.write('#EXTM3U\n\n')
-    
-            for country in sorted_categories:
-                # Ordina i canali in ordine alfabetico dentro la categoria
-                grouped_channels[country].sort(key=lambda x: x[0].lower())
-    
-                for name, url in grouped_channels[country]:
-                    f.write(f'#EXTINF:-1 tvg-name="{name}" group-title="{country}", {name}\n')
-                    vavoo_headers = {"User-Agent": "VAVOO/2.6", "Referer": "https://vavoo.to/", "Origin": "https://vavoo.to"}
-                    vlc_opt_lines = headers_to_extvlcopt(vavoo_headers)
-                    for line in vlc_opt_lines:
-                        f.write(f'{line}\n')
-                    f.write(f"{url}\n\n")
-    
-    # Funzione principale
-    def main():
+    def get_channels():
+        signature = getAuthSignature()
+        headers = {
+            "user-agent": "okhttp/4.11.0",
+            "accept": "application/json",
+            "content-type": "application/json; charset=utf-8",
+            "accept-encoding": "gzip",
+            "mediahubmx-signature": signature
+        }
         all_channels = []
-        for url in BASE_URLS:
-            channels = fetch_channels(url)
-            for ch in channels:
-                clean_name = clean_channel_name(ch["name"])
-                country = ch.get("country", "Unknown")  # Estrai la nazione del canale, default ÃÂ¨ "Unknown"
-                all_channels.append((clean_name, f"{url}/play/{ch['id']}/index.m3u8", country))
+        for group in vavoo_groups():
+            cursor = 0
+            while True:
+                data = {
+                    "language": "de",
+                    "region": "AT",
+                    "catalogId": "iptv",
+                    "id": "iptv",
+                    "adult": False,
+                    "search": "",
+                    "sort": "name",
+                    "filter": {"group": group},
+                    "cursor": cursor,
+                    "clientVersion": "3.0.2"
+                }
+                resp = requests.post("https://vavoo.to/mediahubmx-catalog.json", json=data, headers=headers, timeout=10)
+                r = resp.json()
+                items = r.get("items", [])
+                all_channels.extend(items)
+                cursor = r.get("nextCursor")
+                if not cursor:
+                    break
+        return all_channels
     
-        save_m3u8(all_channels)
-        print(f"File {OUTPUT_FILE} creato con successo!")
+    def save_as_m3u(channels, filename="world.m3u8"):
+        # Raggruppa i canali per categoria
+        channels_by_category = {}
+        
+        for ch in channels:
+            original_name = ch.get("name", "SenzaNome")
+            # Pulisce il nome rimuovendo .a, .b, .c
+            name = clean_channel_name(original_name)
+            url = ch.get("url", "")
+            category = ch.get("group", "Generale")  # Usa il campo "group" come categoria
+            
+            if url:
+                if category not in channels_by_category:
+                    channels_by_category[category] = []
+                channels_by_category[category].append((name, url))
+        
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write("#EXTM3U\n")
+            
+            # Scrivi i canali raggruppati per categoria
+            for category, channel_list in channels_by_category.items():
+                # Aggiungi un commento per la categoria
+                f.write(f"\n# {category.upper()}\n")
+                
+                for name, url in channel_list:
+                    f.write(f'#EXTINF:-1 group-title="{category}",{name}\n{url}\n')
+        
+        print(f"Playlist M3U salvata in: {filename}")
+        print(f"Canali organizzati in {len(channels_by_category)} categorie:")
+        for category, channel_list in channels_by_category.items():
+            print(f"  - {category}: {len(channel_list)} canali")
     
     if __name__ == "__main__":
-        main()
+        channels = get_channels()
+        print(f"Trovati {len(channels)} canali. Creo la playlist M3U con i link proxy...")
+        save_as_m3u(channels) 
 
 def removerworld():
     import os
