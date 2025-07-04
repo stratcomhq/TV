@@ -9,131 +9,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DADDY_CACHE_FILE = "daddy_cache.json"
-daddy_cache = {}
-
-def load_daddy_cache():
-    canali_daddy_flag = os.getenv("CANALI_DADDY", "no").strip().lower()
-    if canali_daddy_flag != "si":
-        print("[INFO] Skipping loading daddy_cache as CANALI_DADDY is not 'si'.")
-        return
-    """Carica la cache dei link di daddy da un file JSON."""
-    global daddy_cache
-    if os.path.exists(DADDY_CACHE_FILE):
-        try:
-            with open(DADDY_CACHE_FILE, 'r', encoding='utf-8') as f:
-                daddy_cache = json.load(f)
-                print(f"[i] Cache dei link daddy caricata da {DADDY_CACHE_FILE}")
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"[!] Errore nel caricare la cache dei link daddy: {e}")
-            daddy_cache = {}
-
-def save_daddy_cache():
-    canali_daddy_flag = os.getenv("CANALI_DADDY", "no").strip().lower()
-    if canali_daddy_flag != "si":
-        print("[INFO] Skipping saving daddy_cache as CANALI_DADDY is not 'si'.")
-        return
-    """Salva la cache dei link di daddy su un file JSON."""
-    global daddy_cache
-    try:
-        with open(DADDY_CACHE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(daddy_cache, f, indent=4)
-        print(f"[i] Cache dei link daddy salvata in {DADDY_CACHE_FILE}")
-    except IOError as e:
-        print(f"[!] Errore nel salvare la cache dei link daddy: {e}")
-
-def headers_to_extvlcopt(headers_dict):
-    """Converts a dictionary of headers to a full #EXTVLCOPT line."""
-    if not headers_dict:
-        return []
-    
-    vlc_opt_lines = []
-    for key, value in headers_dict.items():
-        lower_key = key.lower()
-        if lower_key == 'user-agent':
-            vlc_opt_lines.append(f'#EXTVLCOPT:http-user-agent={value}')
-        elif lower_key == 'referer':
-            vlc_opt_lines.append(f'#EXTVLCOPT:http-referer={value}')
-        elif lower_key == 'cookie':
-            vlc_opt_lines.append(f'#EXTVLCOPT:http-cookie={value}')
-        elif lower_key == 'origin': # Specific handling for Origin
-            vlc_opt_lines.append(f'#EXTVLCOPT:http-origin={value}')
-        else:
-            # Generic header format, ensuring value is a string
-            vlc_opt_lines.append(f'#EXTVLCOPT:http-header="{key}: {str(value)}"') # Keep quotes and colon for generic http-header
-            
-    return vlc_opt_lines
-
-def search_m3u8_in_sites(channel_id, is_tennis=False):
-    """
-    Cerca i file .m3u8 nei siti specificati per i canali daddy e tennis
-    """
-    # Controlla la cache prima per i canali daddy
-    if not is_tennis and str(channel_id) in daddy_cache:
-        cached_url = daddy_cache[str(channel_id)]
-        print(f"[✓] Stream daddy trovato nella cache per channel_id {channel_id}: {cached_url}")
-        return cached_url
-
-    PROXY_URL = os.getenv("HTTP_PROXY")
-    PROXIES = {"http": PROXY_URL, "https": PROXY_URL} if PROXY_URL else None
-    
-    if PROXY_URL:
-        print(f"[i] Tentativo di utilizzo del proxy per le richieste a new.newkso.ru.")
-
-    if is_tennis:
-        # Per i canali tennis, cerca in wikihz
-        # Esempio: se id è 1507 cerca wikiten7, se è 1517 cerca wikiten17
-        if len(str(channel_id)) == 4 and str(channel_id).startswith('15'):
-            tennis_suffix = str(channel_id)[2:]  # Prende le ultime due cifre
-            folder_name = f"wikiten{tennis_suffix}"
-            base_url = "https://new.newkso.ru/wikihz/"
-            test_url = f"{base_url}{folder_name}/mono.m3u8"
-            
-            try:
-                response = requests.head(test_url, timeout=15, proxies=PROXIES)
-                if response.status_code == 200:
-                    print(f"[✓] Stream tennis trovato: {test_url}")
-                    return test_url
-                else:
-                    print(f"[-] Tentativo su {test_url} fallito con status code: {response.status_code}")
-            except requests.exceptions.RequestException as e:
-                print(f"[!] Errore di rete cercando {test_url}: {e}")
-            except Exception as e:
-                print(f"[!] Errore imprevisto cercando {test_url}: {e}")
-
-    else:
-        # Per i canali daddy, cerca nei siti specificati
-        daddy_sites = [
-            "https://new.newkso.ru/wind/",
-            "https://new.newkso.ru/ddy6/", 
-            "https://new.newkso.ru/zeko/",
-            "https://new.newkso.ru/nfs/",
-            "https://new.newkso.ru/dokko1/"
-        ]
-        
-        folder_name = f"premium{channel_id}"
-        
-        for site in daddy_sites:
-            test_url = f"{site}{folder_name}/mono.m3u8"
-            try:
-                response = requests.head(test_url, timeout=15, proxies=PROXIES)
-                if response.status_code == 200:
-                    print(f"[✓] Stream daddy trovato: {test_url}")
-                    # Salva nella cache in memoria
-                    daddy_cache[str(channel_id)] = test_url
-                    return test_url
-                else:
-                    # Logga lo status code per il debug
-                    print(f"[-] Tentativo su {test_url} fallito con status code: {response.status_code}")
-            except requests.exceptions.RequestException as e:
-                print(f"[!] Errore di rete cercando {test_url}: {e}")
-                continue # Continua con il prossimo sito
-            except Exception as e:
-                print(f"[!] Errore imprevisto cercando {test_url}: {e}")
-    
-    print(f"[!] Nessun stream .m3u8 trovato per channel_id {channel_id}")
-    return None
-
 def merger_playlist():
     # Codice del primo script qui
     # Aggiungi il codice del tuo script "merger_playlist.py" in questa funzione.
@@ -3114,7 +2989,7 @@ def remover():
 
 # Funzione principale che esegue tutti gli script
 def main():
-    load_daddy_cache()
+    # load_daddy_cache()  # RIMOSSO: non più definita né necessaria
     try:
         canali_daddy_flag = os.getenv("CANALI_DADDY", "no").strip().lower()
         if canali_daddy_flag == "si":
@@ -3186,7 +3061,7 @@ def main():
 
         print("Tutti gli script sono stati eseguiti correttamente!")
     finally:
-        save_daddy_cache()
+        pass  # save_daddy_cache() RIMOSSO: non più definita né necessaria
 
 if __name__ == "__main__":
     main()
