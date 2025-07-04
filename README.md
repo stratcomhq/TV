@@ -105,7 +105,7 @@ Avvia creando un fork della repository proxy.
 
 ---
 
-### 🔁 Come proxare la lista con Mediaflow-Proxy e TvProxy assieme?
+### 🔁 Come proxare le liste con Mediaflow-Proxy e TvProxy assieme?
 
 Clicca sul seguente URL per generare la lista: `https://nzo66-mfpform3u.hf.space/`
 
