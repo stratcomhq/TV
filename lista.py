@@ -2674,50 +2674,6 @@ def italy_channels():
         for category, channel_list in channels_by_category.items():
             print(f"  {category}: {len(channel_list)} canali")
 
-    def search_m3u8_in_sites(channel_id, is_tennis=False):
-        """
-        Cerca i file .m3u8 nei siti specificati per i canali daddy e tennis
-        """
-        if is_tennis:
-            # Per i canali tennis, cerca in wikihz
-            if len(str(channel_id)) == 4 and str(channel_id).startswith('15'):
-                tennis_suffix = str(channel_id)[2:]  # Prende le ultime due cifre
-                folder_name = f"wikiten{tennis_suffix}"
-                base_url = "https://new.newkso.ru/wikihz/"
-                test_url = f"{base_url}{folder_name}/mono.m3u8"
-                
-                try:
-                    response = requests.head(test_url, timeout=5)
-                    if response.status_code == 200:
-                        print(f"[✓] Stream tennis trovato: {test_url}")
-                        return test_url
-                except:
-                    pass
-        else:
-            # Per i canali daddy, cerca nei siti specificati
-            daddy_sites = [
-                "https://new.newkso.ru/wind/",
-                "https://new.newkso.ru/ddy6/", 
-                "https://new.newkso.ru/zeko/",
-                "https://new.newkso.ru/nfs/",
-                "https://new.newkso.ru/dokko1/"
-            ]
-            
-            folder_name = f"premium{channel_id}"
-            
-            for site in daddy_sites:
-                test_url = f"{site}{folder_name}/mono.m3u8"
-                try:
-                    response = requests.head(test_url, timeout=5)
-                    if response.status_code == 200:
-                        print(f"[✓] Stream daddy trovato: {test_url}")
-                        return test_url
-                except:
-                    continue
-        
-        print(f"[!] Nessun stream .m3u8 trovato per channel_id {channel_id}")
-        return None
-
     def get_stream_from_channel_id(channel_id):
         """Risolve lo stream URL per un canale Daddylive dato il suo ID"""
         # Usa direttamente il metodo .php
