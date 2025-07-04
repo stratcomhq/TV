@@ -2247,56 +2247,61 @@ def epg_eventi_generator():
 # Funzione per il sesto script (italy_channels.py)
 def italy_channels():
     print("Eseguendo il italy_channels.py...")
-
     import requests
+    import time
     import re
-    import os
     import xml.etree.ElementTree as ET
-    from dotenv import load_dotenv
-    import urllib.parse # Aggiunto per urlencode e quote
-    import json         # Aggiunto per json.JSONDecodeError
-    from bs4 import BeautifulSoup # Aggiunto per il parsing HTML
+    import os
+    from bs4 import BeautifulSoup
 
-    # Carica le variabili d'ambiente dal file .env
-    load_dotenv()
+    # Variabile d'ambiente per controllare i canali Daddylive
+    CANALI_DADDY = os.getenv("CANALI_DADDY", "no").strip().lower() == "si"
+    LINK_DADDY = os.getenv("LINK_DADDY", "https://daddylivehd.sx")
 
-    LINK_SS = os.getenv("LINK_SKYSTREAMING", "https://skystreaming.yoga").strip()
-    LINK_DADDY = os.getenv("LINK_DADDY", "https://daddylive.dad").strip()
-    EPG_FILE = "epg.xml"
-    OUTPUT_FILE = "channels_italy.m3u8"
-    DEFAULT_TVG_ICON = ""
-    HTTP_TIMEOUT = 20  # Timeout per le richieste HTTP in secondi
+    def getAuthSignature():
+        headers = {
+            "user-agent": "okhttp/4.11.0",
+            "accept": "application/json",
+            "content-type": "application/json; charset=utf-8",
+            "content-length": "1106",
+            "accept-encoding": "gzip"
+        }
+        data = {
+            "token": "tosFwQCJMS8qrW_AjLoHPQ41646J5dRNha6ZWHnijoYQQQoADQoXYSo7ki7O5-CsgN4CH0uRk6EEoJ0728ar9scCRQW3ZkbfrPfeCXW2VgopSW2FWDqPOoVYIuVPAOnXCZ5g",
+            "reason": "app-blur",
+            "locale": "de",
+            "theme": "dark",
+            "metadata": {
+                "device": {
+                    "type": "Handset",
+                    "os": "Android",
+                    "osVersion": "10",
+                    "model": "Pixel 4",
+                    "brand": "Google"
+                }
+            }
+        }
+        resp = requests.post("https://vavoo.to/mediahubmx-signature.json", json=data, headers=headers, timeout=10)
+        return resp.json().get("signature")
 
-    # Crea una sessione requests per riutilizzare connessioni e gestire cookies
-    session = requests.Session()
+    def vavoo_groups():
+        # Puoi aggiungere altri gruppi per più canali
+        return ["Italy"]
 
-    BASE_URLS = [
-        "https://vavoo.to"
-    ]
+    def clean_channel_name(name):
+        """Rimuove i suffissi .a, .b, .c dal nome del canale"""
+        # Rimuove .a, .b, .c alla fine del nome (con o senza spazi prima)
+        cleaned_name = re.sub(r'\s*\.(a|b|c|s|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|t|u|v|w|x|y|z)\s*$', '', name, flags=re.IGNORECASE)
+        return cleaned_name.strip()
 
-    CATEGORY_KEYWORDS = {
-        "Rai": ["rai"],
-        "Mediaset": ["twenty seven", "twentyseven", "mediaset", "italia 1", "italia 2", "canale 5"],
-        "Sport": ["inter", "milan", "lazio", "calcio", "tennis", "sport", "super tennis", "supertennis", "dazn", "eurosport", "sky sport", "rai sport"],
-        "Film & Serie TV": ["crime", "primafila", "cinema", "movie", "film", "serie", "hbo", "fox", "rakuten", "atlantic"],
-        "News": ["news", "tg", "rai news", "sky tg", "tgcom"],
-        "Bambini": ["frisbee", "super!", "fresbee", "k2", "cartoon", "boing", "nick", "disney", "baby", "rai yoyo"],
-        "Documentari": ["documentaries", "discovery", "geo", "history", "nat geo", "nature", "arte", "documentary"],
-        "Musica": ["deejay", "rds", "hits", "rtl", "mtv", "vh1", "radio", "music", "kiss", "kisskiss", "m2o", "fm"],
-        "Altro": ["focus", "real time"]
-    }
-
-    def fetch_epg(epg_file):
-        try:
-            tree = ET.parse(epg_file)
-            return tree.getroot()
-        except Exception as e:
-            print(f"Errore durante la lettura del file EPG: {e}")
-            return None
+    def normalize_channel_name(name):
+        name = re.sub(r"\s+", "", name.strip().lower())
+        name = re.sub(r"\.it\b", "", name)
+        name = re.sub(r"hd|fullhd", "", name)
+        return name
 
     def fetch_logos():
-        # Contenuto di logos.txt integrato come dizionario Python
-        logos_data = {
+        return {
             "sky uno": "https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/italy/sky-uno-it.png",
             "rai 1": "https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/italy/rai-1-it.png",
             "rai 2": "https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/italy/rai-2-it.png",
@@ -2632,128 +2637,237 @@ def italy_channels():
             "radio capital": "https://static.wikia.nocookie.net/logopedia/images/1/1e/Radio_Capital_-_Logo_2019.svg.png/revision/latest?cb=20190815181629",
             "radio 51": "https://tvtvtv.ru/icons/51_tv.png" # Duplicato di "51 radio tv"
         }
-        # Converti tutte le chiavi in minuscolo per una corrispondenza case-insensitive
-        return {k.lower(): v for k, v in logos_data.items()}
 
-    def normalize_channel_name(name):
-        name = re.sub(r"\s+", "", name.strip().lower())
-        name = re.sub(r"\.it\b", "", name)
-        name = re.sub(r"hd|fullhd", "", name)
-        return name
-
-    def create_channel_id_map(epg_root):
-        channel_id_map = {}
-        for channel in epg_root.findall('channel'):
-            tvg_id = channel.get('id')
-            display_name = channel.find('display-name').text
-            if tvg_id and display_name:
-                normalized_name = normalize_channel_name(display_name)
-                channel_id_map[normalized_name] = tvg_id
-        return channel_id_map
-
-    def fetch_channels(base_url):
-        try:
-            response = session.get(f"{base_url}/channels", timeout=HTTP_TIMEOUT)
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as e:
-            print(f"Errore durante il download da {base_url}: {e}")
-            return []
-
-    def clean_channel_name(name):
-        name = re.sub(r"\s*(\|E|\|H|\(6\)|\(7\)|\.c|\.s)", "", name)
-        name = re.sub(r"\s*\(.*?\)", "", name)
-        if "zona dazn" in name.lower() or "dazn 1" in name.lower():
-            return "DAZN2"
-        if "mediaset 20" in name.lower():
-            return "20 MEDIASET"
-        if "mediaset italia 2" in name.lower():
-            return "ITALIA 2"
-        if "mediaset 1" in name.lower():
-            return "ITALIA 1"
-        return name.strip()
-
-    def filter_italian_channels(channels, base_url):
-        seen = {}
-        results = []
-        for ch in channels:
-            if ch.get("country") == "Italy":
-                clean_name = clean_channel_name(ch["name"])
-                if clean_name.lower() in ["dazn", "dazn 2"]:
-                    continue
-                count = seen.get(clean_name, 0) + 1
-                seen[clean_name] = count
-                if count > 1:
-                    clean_name = f"{clean_name} ({count})"
-                results.append((clean_name, f"{base_url}/play/{ch['id']}/index.m3u8"))
-        return results
+    CATEGORY_KEYWORDS = {
+        "Rai": ["rai"],
+        "Mediaset": ["twenty seven", "twentyseven", "mediaset", "italia 1", "italia 2", "canale 5"],
+        "Sport": ["inter", "milan", "lazio", "calcio", "tennis", "sport", "super tennis", "supertennis", "dazn", "eurosport", "sky sport", "rai sport"],
+        "Film & Serie TV": ["crime", "primafila", "cinema", "movie", "film", "serie", "hbo", "fox", "rakuten", "atlantic"],
+        "News": ["news", "tg", "rai news", "sky tg", "tgcom"],
+        "Bambini": ["frisbee", "super!", "fresbee", "k2", "cartoon", "boing", "nick", "disney", "baby", "rai yoyo"],
+        "Documentari": ["documentaries", "discovery", "geo", "history", "nat geo", "nature", "arte", "documentary"],
+        "Musica": ["deejay", "rds", "hits", "rtl", "mtv", "vh1", "radio", "music", "kiss", "kisskiss", "m2o", "fm"],
+        "Altro": ["focus", "real time"]
+    }
 
     def classify_channel(name):
+        name_lower = name.lower()
         for category, words in CATEGORY_KEYWORDS.items():
-            if any(word in name.lower() for word in words):
+            if any(word in name_lower for word in words):
                 return category
         return "Altro"
 
-    def get_manual_channels():
-        # LINK_SS e LINK_DADDY sono disponibili qui se necessario per costruire URL o header specifici,
-        # poichÃ© sono caricate nello scope della funzione italy_channels().
-
-        # Esempio di header comuni per un gruppo di canali (es. kangal)
-        custom_common_headers = {
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-            "referer": f"{LINK_SS}/", 
-            "origin": LINK_SS        
+    def get_channels():
+        signature = getAuthSignature()
+        headers = {
+            "user-agent": "okhttp/4.11.0",
+            "accept": "application/json",
+            "content-type": "application/json; charset=utf-8",
+            "accept-encoding": "gzip",
+            "mediahubmx-signature": signature
         }
+        all_channels = []
+        for group in vavoo_groups():
+            cursor = 0
+            while True:
+                data = {
+                    "language": "de",
+                    "region": "AT",
+                    "catalogId": "iptv",
+                    "id": "iptv",
+                    "adult": False,
+                    "search": "",
+                    "sort": "name",
+                    "filter": {"group": group},
+                    "cursor": cursor,
+                    "clientVersion": "3.0.2"
+                }
+                resp = requests.post("https://vavoo.to/mediahubmx-catalog.json", json=data, headers=headers, timeout=10)
+                r = resp.json()
+                items = r.get("items", [])
+                all_channels.extend(items)
+                cursor = r.get("nextCursor")
+                if not cursor:
+                    break
+        return all_channels
 
-        return [
-            # --- Canali CUSTOM (esempio con header comuni) ---
-            #{"name": "XXXXX", "url": "XXXXXXXXX.m3u8", "tvg_id": "XXXXXXXX", "logo": "XXXXXXXX.png", "category": "XXXXXXXXXX", "http_headers": custom_common_headers}
+    def create_tvg_id_map(epg_file="epg.xml"):
+        tvg_id_map = {}
+        try:
+            tree = ET.parse(epg_file)
+            root = tree.getroot()
+            for channel in root.findall('channel'):
+                tvg_id = channel.get('id')
+                display_name = channel.find('display-name').text
+                if tvg_id and display_name:
+                    normalized_name = normalize_channel_name(display_name)
+                    tvg_id_map[normalized_name] = tvg_id
+        except Exception as e:
+            print(f"Errore nella lettura di {epg_file}: {e}")
+        return tvg_id_map
 
-            # --- ESEMPIO: Canale con header DIVERSI/UNICI ---
-            #{
-            #    "name": "Mio Canale Custom Alpha (X)",
-            #    "url": "https://streaming.esempio.com/alpha/playlist.m3u8",
-            #    "tvg_id": "custom.alpha.it", # ID per EPG
-            #    "logo": "https://esempio.com/logo_alpha.png", # URL del logo
-            #    "category": "Custom", # Categoria per raggruppamento
-            #    "http_headers": {
-            #        "user-agent": "MioPlayerCustom/1.0",
-            #        "Referer": "https://sito-referer.esempio.com/"
-            #        "origin": "https://sito-referer.esempio.com"
-            #    }
-            #}
-            
-        ]
-
-    # --- Funzioni per risolvere gli stream Daddylive ---
-    def get_stream_from_channel_id(channel_id):
-        # Prima cerca nei nuovi siti .m3u8
-        m3u8_url = search_m3u8_in_sites(channel_id, is_tennis=False)
-        if m3u8_url:
-            return m3u8_url
+    def save_as_m3u(channels, daddylive_channels=None, filename="channels_italy.m3u8"):
+        logos = fetch_logos()
+        tvg_id_map = create_tvg_id_map("epg.xml")
+        channels_by_category = {}
         
-        # Fallback al vecchio metodo .php se non trovato
+        # Processa i canali Vavoo
+        for ch in channels:
+            original_name = ch.get("name", "SenzaNome")
+            name = clean_channel_name(original_name)
+            url = ch.get("url", "")
+            category = classify_channel(name)
+            if url:
+                if category not in channels_by_category:
+                    channels_by_category[category] = []
+                channels_by_category[category].append({"name": name, "url": url})
+        
+        # Processa i canali Daddylive se presenti
+        if daddylive_channels:
+            for raw_name, stream_url in daddylive_channels:
+                # Pulizia e trasformazione del nome come nella logica originale
+                name_after_initial_clean = clean_channel_name(raw_name)
+                
+                # Rimuovi "italy" e converti in maiuscolo
+                base_daddy_name = re.sub(r'italy', '', name_after_initial_clean, flags=re.IGNORECASE).strip()
+                base_daddy_name = re.sub(r'\s+', ' ', base_daddy_name).strip()
+                base_daddy_name = base_daddy_name.upper()
+                
+                # Usa la mappa fornita per la rinomina dei canali Sky Calcio specifici di Daddylive
+                sky_calcio_rename_map = {
+                    "SKY CALCIO 1": "SKY SPORT 251",
+                    "SKY CALCIO 2": "SKY SPORT 252",
+                    "SKY CALCIO 3": "SKY SPORT 253",
+                    "SKY CALCIO 4": "SKY SPORT 254",
+                    "SKY CALCIO 5": "SKY SPORT 255",
+                    "SKY CALCIO 6": "SKY SPORT 256",
+                    "SKY CALCIO 7": "DAZN 1"
+                }
+
+                # Rimuovi eventuali numeri tra parentesi dal nome base prima della mappa
+                base_daddy_name_clean = re.sub(r"\s*\(\d+\)", "", base_daddy_name).strip()
+                if base_daddy_name_clean in sky_calcio_rename_map:
+                    base_daddy_name = sky_calcio_rename_map[base_daddy_name_clean]
+                
+                # Skip DAZN
+                if base_daddy_name == "DAZN" or base_daddy_name == "DAZN2":
+                    continue
+                
+                # Aggiungi suffisso (D) per identificare i canali Daddylive
+                final_name = f"{base_daddy_name} (D)"
+                category = classify_channel(base_daddy_name)
+                
+                # Usa il nome base (senza suffisso) per cercare logo e tvg-id
+                logo = logos.get(base_daddy_name.lower(), "")
+                tvg_id = tvg_id_map.get(normalize_channel_name(base_daddy_name), "")
+                
+                if category not in channels_by_category:
+                    channels_by_category[category] = []
+                channels_by_category[category].append({
+                    "name": final_name, 
+                    "url": stream_url,
+                    "logo": logo,
+                    "tvg_id": tvg_id
+                })
+        
+        # Salva nel file M3U
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write("#EXTM3U\n")
+            for category, channel_list in channels_by_category.items():
+                channel_list.sort(key=lambda x: x["name"].lower())
+                f.write(f"\n# {category.upper()}\n")
+                for ch in channel_list:
+                    name = ch["name"]
+                    url = ch["url"]
+                    
+                    # Usa logo e tvg_id specifici se presenti (per canali Daddylive)
+                    if "logo" in ch and "tvg_id" in ch:
+                        logo = ch["logo"]
+                        tvg_id = ch["tvg_id"]
+                    else:
+                        # Fallback per canali Vavoo (logica originale)
+                        logo = logos.get(name.lower(), "")
+                        tvg_id = tvg_id_map.get(normalize_channel_name(name), "")
+                    
+                    f.write(f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-logo="{logo}" group-title="{category}",{name}\n{url}\n')
+        
+        print(f"Playlist M3U salvata in: {filename}")
+        print(f"Totale canali Vavoo: {len(channels)}")
+        if daddylive_channels:
+            print(f"Totale canali Daddylive: {len(daddylive_channels)}")
+        print(f"Totale canali per categoria:")
+        for category, channel_list in channels_by_category.items():
+            print(f"  {category}: {len(channel_list)} canali")
+
+    def search_m3u8_in_sites(channel_id, is_tennis=False):
+        """
+        Cerca i file .m3u8 nei siti specificati per i canali daddy e tennis
+        """
+        if is_tennis:
+            # Per i canali tennis, cerca in wikihz
+            if len(str(channel_id)) == 4 and str(channel_id).startswith('15'):
+                tennis_suffix = str(channel_id)[2:]  # Prende le ultime due cifre
+                folder_name = f"wikiten{tennis_suffix}"
+                base_url = "https://new.newkso.ru/wikihz/"
+                test_url = f"{base_url}{folder_name}/mono.m3u8"
+                
+                try:
+                    response = requests.head(test_url, timeout=5)
+                    if response.status_code == 200:
+                        print(f"[✓] Stream tennis trovato: {test_url}")
+                        return test_url
+                except:
+                    pass
+        else:
+            # Per i canali daddy, cerca nei siti specificati
+            daddy_sites = [
+                "https://new.newkso.ru/wind/",
+                "https://new.newkso.ru/ddy6/", 
+                "https://new.newkso.ru/zeko/",
+                "https://new.newkso.ru/nfs/",
+                "https://new.newkso.ru/dokko1/"
+            ]
+            
+            folder_name = f"premium{channel_id}"
+            
+            for site in daddy_sites:
+                test_url = f"{site}{folder_name}/mono.m3u8"
+                try:
+                    response = requests.head(test_url, timeout=5)
+                    if response.status_code == 200:
+                        print(f"[✓] Stream daddy trovato: {test_url}")
+                        return test_url
+                except:
+                    continue
+        
+        print(f"[!] Nessun stream .m3u8 trovato per channel_id {channel_id}")
+        return None
+
+    def get_stream_from_channel_id(channel_id):
+        """Risolve lo stream URL per un canale Daddylive dato il suo ID"""
+        # Usa direttamente il metodo .php
         raw_php_url = f"{LINK_DADDY.rstrip('/')}/stream/stream-{channel_id}.php"
-        print(f"Fallback URL .php per il canale Daddylive {channel_id}.")
+        print(f"URL .php per il canale Daddylive {channel_id}: {raw_php_url}")
         return raw_php_url
-    # --- Fine funzioni Daddylive ---
 
     def fetch_channels_from_daddylive_page(page_url, base_daddy_url):
+        """Estrae i canali dalla pagina HTML di Daddylive 24/7"""
         print(f"Tentativo di fetch dei canali da: {page_url}")
         channels = []
-        seen_daddy_channel_ids = set() # Set per tracciare i channel_id giÃ  visti da Daddylive
+        seen_daddy_channel_ids = set()
+        
         try:
-            response = session.get(page_url, timeout=HTTP_TIMEOUT, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'})
+            response = requests.get(page_url, timeout=10, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            })
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'html.parser')
 
-            # --- INIZIO LOGICA DI PARSING E FILTRAGGIO SPECIFICA PER DADDYLIVE 24-7 CHANNELS ---
-
-            # Marcatori che suggeriscono un canale NON italiano (per evitare falsi positivi)
+            # Marcatori che suggeriscono un canale NON italiano
             non_italian_markers = [
                 " (de)", " (fr)", " (es)", " (uk)", " (us)", " (pt)", " (gr)", " (nl)", " (tr)", " (ru)",
-                " deutsch", " france", " espaÃ±ol", " arabic", " greek", " turkish", " russian", " albania",
-                " portugal" # Aggiunto basandomi sull'esempio fornito
+                " deutsch", " france", " español", " arabic", " greek", " turkish", " russian", " albania",
+                " portugal"
             ]
 
             grid_items = soup.find_all('div', class_='grid-item')
@@ -2771,7 +2885,7 @@ def italy_channels():
                 channel_name_raw = strong_tag.text.strip()
                 href = link_tag.get('href')
                 
-                # Estrai l'ID del canale dall'href, es. /stream/stream-717.php -> 717
+                # Estrai l'ID del canale dall'href
                 channel_id_match = re.search(r'/stream/stream-(\d+)\.php', href)
 
                 if channel_id_match and channel_name_raw:
@@ -2780,7 +2894,7 @@ def italy_channels():
 
                     if channel_id in seen_daddy_channel_ids:
                         print(f"Skipping Daddylive channel '{channel_name_raw}' (ID: {channel_id}) perché l'ID è già stato processato.")
-                        continue # Passa al prossimo item
+                        continue
 
                     # Filtro primario: deve contenere "italy"
                     if "italy" in lower_channel_name:
@@ -2792,7 +2906,7 @@ def italy_channels():
                                 break
                         
                         if not is_confirmed_non_italian_by_marker:
-                            seen_daddy_channel_ids.add(channel_id) # Aggiungi l'ID al set prima di tentare la risoluzione
+                            seen_daddy_channel_ids.add(channel_id)
                             print(f"Trovato canale potenzialmente ITALIANO (Daddylive HTML): {channel_name_raw}, ID: {channel_id}. Tentativo di risoluzione stream...")
                             stream_url = get_stream_from_channel_id(channel_id)
                             if stream_url:
@@ -2800,11 +2914,6 @@ def italy_channels():
                                 print(f"Risolto e aggiunto stream per {channel_name_raw}: {stream_url}")
                             else:
                                 print(f"Impossibile risolvere lo stream per {channel_name_raw} (ID: {channel_id})")
-                    # else:
-                        # Questo blocco Ã¨ commentato per non intasare i log con canali non italiani
-                        # Non stampiamo nulla per i canali che non contengono "italy" per non intasare il log
-                        # print(f"Skipping Daddylive channel '{channel_name_raw}' (ID: {channel_id}) perchÃ© non contiene 'italy' nel nome.")
-            # --- FINE LOGICA DI PARSING E FILTRAGGIO ---
 
             if not channels:
                 print(f"Nessun canale estratto/risolto da {page_url}. Controlla la logica di parsing o la struttura della pagina.")
@@ -2813,210 +2922,28 @@ def italy_channels():
             print(f"Errore durante il download da {page_url}: {e}")
         except Exception as e:
             print(f"Errore imprevisto durante il parsing di {page_url}: {e}")
+        
         return channels
 
-    def save_m3u8(organized_channels):
-        if os.path.exists(OUTPUT_FILE):
-            os.remove(OUTPUT_FILE)
-        with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-            f.write('#EXTM3U\n\n')
-            for category, channels_list in organized_channels.items(): # Renamed 'channels' to 'channels_list'
-                channels_list.sort(key=lambda x: x["name"].lower())
-                for ch_data in channels_list: # Renamed 'ch' to 'ch_data' as it's a dict
-                    raw_channel_url = ch_data['url']
-                    channel_name = ch_data['name']
-                    tvg_name_cleaned = re.sub(r"\s*\(.*?\)", "", ch_data["name"])
-                    final_url_to_write = raw_channel_url
-
-                    if final_url_to_write: # Scrivi solo se l'URL Ã¨ valido
-                        f.write(f'#EXTINF:-1 tvg-id="{ch_data.get("tvg_id", "")}" tvg-name="{tvg_name_cleaned}" tvg-logo="{ch_data.get("logo", DEFAULT_TVG_ICON)}" group-title="{category}",{channel_name}\n')
-                        
-                        # 1. Controlla se ci sono header HTTP personalizzati (tipicamente per canali manuali)
-                        if "http_headers" in ch_data and ch_data["http_headers"]:
-                            headers_dict = ch_data["http_headers"]
-                            vlc_opt_lines = headers_to_extvlcopt(headers_dict)
-                            for line in vlc_opt_lines:
-                                f.write(f"{line}\n")
-                            f.write(f"{final_url_to_write}\n\n") # Write the base URL
-                        # 2. Controlla se Ã¨ un canale Vavoo (basato sull'URL)
-                        elif any(base_vavoo_url.rstrip('/') + "/play/" in final_url_to_write for base_vavoo_url in BASE_URLS): # VAVOO
-                            vavoo_headers = {"User-Agent": "VAVOO/2.6", "Referer": "https://vavoo.to/", "Origin": "https://vavoo.to"}
-                            vlc_opt_lines = headers_to_extvlcopt(vavoo_headers)
-                            for line in vlc_opt_lines:
-                                f.write(f'{line}\n')
-                            f.write(f"{final_url_to_write}\n\n")
-                        # 3. Controlla se è un file .php (tipicamente Daddylive)
-                        elif final_url_to_write.endswith('.php'): 
-                            # Per file .php (es. Daddylive), nessun header speciale aggiunto
-                            f.write(f"{final_url_to_write}\n\n")
-                        # 4. Controlla se è un canale daddy (newkso.ru o premium) ma non .php
-                        elif ("newkso.ru" in final_url_to_write or "premium" in final_url_to_write) and not final_url_to_write.endswith('.php'):
-                            daddy_headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", "Referer": "https://forcedtoplay.xyz/", "Origin": "https://forcedtoplay.xyz"}
-                            vlc_opt_lines = headers_to_extvlcopt(daddy_headers)
-                            for line in vlc_opt_lines:
-                                f.write(f'{line}\n')
-                            f.write(f"{final_url_to_write}\n\n")
-                        # 5. Altri canali (es. link diretti manuali senza http_headers specifici)
-                        else:
-                            # Scrivi l'URL direttamente senza header aggiuntivi
-                            f.write(f"{final_url_to_write}\n\n")
-                    else:
-                        print(f"Skipping channel {channel_name} due to missing stream URL after processing.")
-
-
-    def main():
-        epg_root = fetch_epg(EPG_FILE)
-        if epg_root is None:
-            print("Impossibile recuperare il file EPG, procedura interrotta.")
-            return
-        logos_dict = fetch_logos()
-        channel_id_map = create_channel_id_map(epg_root)
+    if __name__ == "__main__":
+        # 1. Canali da sorgenti Vavoo (JSON)
+        print("\n--- Fetching canali da sorgenti Vavoo (JSON) ---")
+        channels = get_channels()
+        print(f"Trovati {len(channels)} canali Vavoo.")
         
-        all_fetched_channels = [] # ConterrÃ  tuple (nome_canale, url_stream)
-
-        # 1. Canali da sorgenti JSON (Vavoo)
-        print("\n--- Fetching canali da sorgenti Vavoo (JSON) ---") # This line is always printed
-        for base_vavoo_url in BASE_URLS:
-            json_channels_data = fetch_channels(base_vavoo_url)
-            all_fetched_channels.extend(filter_italian_channels(json_channels_data, base_vavoo_url))
-        # Controlla se i canali Daddylive devono essere inclusi
-        canali_daddy_enabled = os.getenv("CANALI_DADDY", "no").strip().lower() == "si"
-        
-        # 2. Canali dalla pagina HTML di Daddylive
-        processed_scraped_channels = []
-        if canali_daddy_enabled:
+        # 2. Canali dalla pagina HTML di Daddylive (se abilitato)
+        daddylive_channels = None
+        if CANALI_DADDY:
             print("\n--- Fetching canali da Daddylive (HTML) ---")
             daddylive_247_page_url = f"{LINK_DADDY.rstrip('/')}/24-7-channels.php"
-            scraped_daddylive_channels = fetch_channels_from_daddylive_page(daddylive_247_page_url, LINK_DADDY)
-            processed_scraped_channels = []
-            seen_daddy_transformed_base_names = {}
-            for raw_name, stream_url in scraped_daddylive_channels:
-                # 1. Pulizia iniziale generica del nome grezzo
-                name_after_initial_clean = clean_channel_name(raw_name)
-
-                # 2. Trasformazioni specifiche per Daddylive:
-                #    - Rimuovi "italy" (case insensitive)
-                #    - Converti in maiuscolo
-                # Questo sarÃ  il nome base per la gestione dei duplicati Daddylive
-                base_daddy_name = re.sub(r'italy', '', name_after_initial_clean, flags=re.IGNORECASE).strip()
-                base_daddy_name = re.sub(r'\s+', ' ', base_daddy_name).strip() # Rimuovi spazi doppi
-                base_daddy_name = base_daddy_name.upper()
-                
-                # Rinominare i canali Sky Calcio e Sky Calcio 7 specifici di Daddylive
-                # Questo avviene DOPO la pulizia iniziale e l'uppercase,
-                # e PRIMA della gestione dei duplicati e dell'aggiunta di "(D)"
-                sky_calcio_rename_map = {
-                    "SKY CALCIO 1": "SKY SPORT 251",
-                    "SKY CALCIO 2": "SKY SPORT 252",
-                    "SKY CALCIO 3": "SKY SPORT 253",
-                    "SKY CALCIO 4": "SKY SPORT 254",
-                    "SKY CALCIO 5": "SKY SPORT 255",
-                    "SKY CALCIO 6": "SKY SPORT 256",
-                    "SKY CALCIO 7": "DAZN 1"
-                }
-
-                if base_daddy_name in sky_calcio_rename_map:
-                    original_bdn_for_log = base_daddy_name
-                    base_daddy_name = sky_calcio_rename_map[base_daddy_name]
-                    print(f"Rinominato canale Daddylive (HTML) da '{original_bdn_for_log}' a '{base_daddy_name}'")
-
-
-                # Gestione skip DAZN (usa il nome base trasformato per il check)
-                # clean_channel_name potrebbe giÃ  aver trasformato "dazn 1" in "DAZN2"
-                if base_daddy_name == "DAZN" or base_daddy_name == "DAZN2":
-                    print(f"Skipping canale Daddylive (HTML) a causa della regola DAZN: {raw_name} (base trasformato: {base_daddy_name})")
-                    continue
-                
-                # 3. Gestione duplicati basata sul nome base trasformato di Daddylive
-                count = seen_daddy_transformed_base_names.get(base_daddy_name, 0) + 1
-                seen_daddy_transformed_base_names[base_daddy_name] = count
-                
-                # 4. Costruzione del nome finale per Daddylive
-                final_name = base_daddy_name
-                if count > 1:
-                    final_name = f"{base_daddy_name} ({count})" # Es. NOME CANALE (2)
-                final_name = f"{final_name} (D)" # Es. NOME CANALE (D) o NOME CANALE (2) (D)
-                
-                processed_scraped_channels.append((final_name, stream_url))
-
-            all_fetched_channels.extend(processed_scraped_channels)
+            daddylive_channels = fetch_channels_from_daddylive_page(daddylive_247_page_url, LINK_DADDY)
+            print(f"Trovati {len(daddylive_channels)} canali Daddylive.")
         else:
-            print("\n--- Skipping Daddylive channels: CANALI_DADDY is not 'si' ---")
-
-        # 3. Canali manuali
-        manual_channels_data = get_manual_channels()
-
-        # Organizzazione di tutti i canali raccolti
-        print("\n--- Organizzazione canali ---")
-        organized_channels = {category: [] for category in CATEGORY_KEYWORDS.keys()}
-
-        # Processa canali da Vavoo e Daddylive HTML (formato: (nome, url))
-        for name, url in all_fetched_channels:
-            # 'name' Ã¨ il nome finale che verrÃ  visualizzato, 
-            # es. "CANALE SPORT (D) (2)" o "CANALE NEWS (3)" (da Vavoo)
-            category = classify_channel(name)
-
-            # Crea un nome base per il lookup di EPG e Logo:
-            name_for_lookup = name
-            # Rimuovi il suffisso (D) specifico di Daddylive, se presente
-            if name_for_lookup.upper().endswith(" (D)"): # Controllo case-insensitive per robustezza
-                # Rimuove l'ultima occorrenza di " (D)" (case insensitive)
-                match_d_suffix = re.search(r'\s*\([Dd]\)$', name_for_lookup)
-                if match_d_suffix:
-                    name_for_lookup = name_for_lookup[:match_d_suffix.start()]
-            
-            # Rimuovi suffissi numerici per duplicati, es. (2), (3)...
-            name_for_lookup = re.sub(r'\s*\(\d+\)$', '', name_for_lookup).strip()
-            # A questo punto, name_for_lookup dovrebbe essere il nome del canale "pulito" 
-            # es. "CANALE SPORT" o "CANALE NEWS" (giÃ  in maiuscolo se da Daddylive)
-
-            # Logica per assegnazione logo
-            final_logo_url = DEFAULT_TVG_ICON # Inizializza con il logo di default
-            sky_sport_daddy_logo = "https://raw.githubusercontent.com/tv-logo/tv-logos/refs/heads/main/countries/italy/hd/sky-sport-hd-it.png"
-
-            # Controlla se il canale Ã¨ uno dei canali Daddylive SKY SPORT 251-256
-            # name_for_lookup Ã¨ il nome base pulito (es. "SKY SPORT 251")
-            # name Ã¨ il nome completo con suffisso (es. "SKY SPORT 251 (D)")
-            if name.upper().endswith(" (D)"): # Verifica se Ã¨ un canale Daddylive
-                if re.match(r"SKY SPORT (25[1-6])$", name_for_lookup.upper()):
-                    # Ã un canale Daddylive SKY SPORT 251-256
-                    final_logo_url = sky_sport_daddy_logo
-                    print(f"Logo specifico '{final_logo_url}' assegnato a Daddylive channel '{name}' (lookup name: '{name_for_lookup}')")
-                else:
-                    # Ã un canale Daddylive, ma non uno dei SKY SPORT 251-256 target, usa il lookup normale
-                    final_logo_url = logos_dict.get(name_for_lookup.lower(), DEFAULT_TVG_ICON)
-            else:
-                # Non Ã¨ un canale Daddylive (es. Vavoo), usa il lookup normale
-                final_logo_url = logos_dict.get(name_for_lookup.lower(), DEFAULT_TVG_ICON)
-
-            organized_channels.setdefault(category, []).append({
-                "name": name, # Nome completo da visualizzare
-                "url": url,
-                "tvg_id": channel_id_map.get(normalize_channel_name(name_for_lookup), ""), # Usa il nome pulito per tvg-id
-                "logo": final_logo_url # Usa il logo determinato dalla logica sopra
-            })
-
-        # Processa canali manuali (formato: dict)
-        for ch_data_manual in manual_channels_data:
-            cat = ch_data_manual.get("category") or classify_channel(ch_data_manual["name"])
-            # Construct the dictionary to append, ensuring all necessary fields are included
-            channel_entry = {
-                "name": ch_data_manual["name"],
-                "url": ch_data_manual["url"],
-                "tvg_id": ch_data_manual.get("tvg_id", ""),
-                "logo": ch_data_manual.get("logo", DEFAULT_TVG_ICON)
-            }
-            if "http_headers" in ch_data_manual: # Pass through http_headers if they exist
-                channel_entry["http_headers"] = ch_data_manual["http_headers"]
-            
-            organized_channels.setdefault(cat, []).append(channel_entry)
-
-
-        save_m3u8(organized_channels)
-        print(f"\nFile {OUTPUT_FILE} creato con successo!")
-
-    if __name__ == "__main__":
-        main()
+            print("\n--- Canali Daddylive disabilitati (CANALI_DADDY=no) ---")
+        
+        # 3. Crea la playlist M3U
+        print("\n--- Creazione playlist M3U ---")
+        save_as_m3u(channels, daddylive_channels) 
 
 # Funzione per il settimo script (world_channels_generator.py)
 def world_channels_generator():
